@@ -1,0 +1,129 @@
+###Purpose
+
+The purpose of this model is to make a classifier for the identification of different
+weight lifting excercises.
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+
+
+The datasets for both training and test is under the contribution of below paper research and they derserve the citation for this efforts.
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+
+I downloaded the dataset not using download.file() since that will make 
+compile inefficient , hopefully you can understand ^^
+
+
+###Data Pre-processing
+First I download the train and test datasets. Read them into R.
+Omit the missing value variables which is useless in building the model.
+I also manually check and deleted other useless varaibles such as row numbers ("X") and user name.
+After all these, I separate the train datasets into training and testing subsets for cross validation purposes. (the ratio is at 0.5 for the data has enough cases,also for fast training purposes)
+```{r,echo=TRUE}
+## load library
+library(caret)
+
+train<-read.csv("trainData.csv")
+test<-read.csv("testData.csv")
+
+## find NA cols and delete from data
+omit<-vector()
+for (i in 1:ncol(test)){
+  if (sum(!is.na(test[,i]))==0){
+    omit<-c(omit,i)
+    
+  }
+
+}
+
+train<-train[,-omit]
+test<-test[,-omit]
+
+##after explortory analysis find some column is useless in model buidling and omit.
+train$X<-NULL
+train$user_name<-NULL
+
+set.seed(1234)
+inTrain<-createDataPartition(train$classe,p=0.5,list=FALSE)
+training<-train[inTrain,]
+testing<-train[-inTrain,]
+```
+
+
+###Principle Components Analysis and modeling 
+
+I first do the PCA analysis with all numeric variables. I set the treshold at 90% variance and it turned out to need 20 principle components to realize the target.
+Then I used this low-dimentional datasets to train the model using Random Forest algorithm because of its calculation efficiency along with the high accuracy.
+(the training process took about 30 minutes to complete.)
+
+```{r,echo=TRUE,cache=TRUE}
+##find numeric variables and make PCA for catching 90% variance.
+numVar<-vector()
+for (i in 1:ncol(training)){
+        
+        if(is.numeric(training[,i])){
+                numVar<-c(numVar,i)
+    
+        }
+  
+}
+
+preProc<-preProcess(training[,numVar],method="pca",thresh=0.9)
+trainPC<-predict(preProc,training[,numVar])
+
+##train model
+modFit<-train(training$classe~.,method="rf",data=trainPC)
+```
+
+
+### out-of-sample error rate and prediction
+Below is the confution matrix by this model compared with the testing datasets.
+This is cross validation for the out of sample error rate at about 3%.
+I didn't further do other model fitting since I thought it's good enough to serve the needs.
+
+Confusion Matrix and Statistics
+
+          Reference
+Prediction    A    B    C    D    E
+         A 2747   14   12   14    3
+         B   40 1816   41    1    0
+         C    2   30 1657   21    1
+         D    6   12   64 1525    1
+         E    5    5   10   12 1771
+
+Overall Statistics
+                                          
+               Accuracy : 0.97            
+                 95% CI : (0.9665, 0.9733)
+    No Information Rate : 0.2854          
+    P-Value [Acc > NIR] : < 2.2e-16       
+                                          
+                  Kappa : 0.9621          
+ Mcnemar's Test P-Value : 1.355e-12       
+
+```{r,echo=TRUE}
+##predict validation test data
+testPC<-predict(preProc,testing[,numVar])
+confusionMatrix(testing$classe,predict(modFit,testPC))
+```
+
+
+### Results
+The final result by the test data is as follow.
+[1] B A B A A E D B A A B C B A E E A B B B
+Levels: A B C D E
+
+It turn out to have 100% accuracy when fiting the real test datasets.
+(thank you again for your kind review and valuable comments)
+
+```{r,echo=T}
+##predict real test data
+test$X<-NULL
+test$user_name<-NULL
+
+rtestPC<-predict(preProc,test[,numVar])
+predict(modFit,rtestPC)
+```
+
